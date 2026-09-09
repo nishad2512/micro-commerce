@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package user;
+
+service UserService {
+    rpc CreateUser (UserDto) returns (UserResponse);
+}
+
+message UserDto {
+    string name = 1;
+    string email = 2;
+}
+
+message UserResponse {
+    bool success = 1;
+    string message = 2;
+    string userId = 3;
+}

@@ -1,0 +1,6 @@
+-- CreateEnum
+CREATE TYPE "Status" AS ENUM ('PENDING', 'CANCELLED', 'CONFIRMED', 'SHIPPED');
+
+-- AlterTable
+ALTER TABLE "Order" ADD COLUMN     "status" "Status" NOT NULL DEFAULT 'PENDING',
+ALTER COLUMN "userId" SET DATA TYPE TEXT;
