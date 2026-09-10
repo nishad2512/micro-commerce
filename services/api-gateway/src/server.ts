@@ -7,13 +7,13 @@ const PORT = process.env.PORT || 3000;
 // grpc client
 
 const orderClient: any = createGrpcClient(
-    "../../../proto/order.proto",
+    "../../../../proto/order.proto",
     "order.OrderService",
     "localhost:50051",
 );
 
 const userClient: any = createGrpcClient(
-    "../../../proto/user.proto",
+    "../../../../proto/user.proto",
     "user.UserService",
     "localhost:50052",
 );

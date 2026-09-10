@@ -1,44 +1,18 @@
 {
-  // Visit https://aka.ms/tsconfig to read more about this file
   "compilerOptions": {
-    // File Layout
-    // "rootDir": "./src",
-    // "outDir": "./dist",
-
-    // Environment Settings
-    // See also https://aka.ms/tsconfig/module
-    "module": "nodenext",
+    "module": "esnext",            // Changed from "nodenext" to match bundler mode
+    "moduleResolution": "bundler",  // Keeps your extensionless imports (.js removal) working
     "target": "esnext",
-    "types": ["node"],
-    // For nodejs:
-    // "lib": ["esnext"],
-    // "types": ["node"],
-    // and npm install -D @types/node
+    
+    // Core settings for TypeORM
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
 
-    // Other Outputs
-    "sourceMap": true,
-    "declaration": true,
-    "declarationMap": true,
+    // Turn these OFF to allow Decorator Metadata to guess types correctly
+    "verbatimModuleSyntax": false,  // <-- CHANGE THIS TO FALSE
+    "isolatedModules": false,       // <-- CHANGE THIS TO FALSE
 
-    // Stricter Typechecking Options
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": true,
-
-    // Style Options
-    // "noImplicitReturns": true,
-    // "noImplicitOverride": true,
-    // "noUnusedLocals": true,
-    // "noUnusedParameters": true,
-    // "noFallthroughCasesInSwitch": true,
-    // "noPropertyAccessFromIndexSignature": true,
-
-    // Recommended Options
     "strict": true,
-    "jsx": "react-jsx",
-    "verbatimModuleSyntax": true,
-    "isolatedModules": true,
-    "noUncheckedSideEffectImports": true,
-    "moduleDetection": "force",
-    "skipLibCheck": true,
+    "skipLibCheck": true
   }
 }

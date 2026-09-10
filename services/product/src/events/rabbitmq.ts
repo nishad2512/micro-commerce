@@ -1,4 +1,5 @@
 import amqplib from "amqplib";
+import { handleInventoryRelease, handleOrderCreate } from "../services/inventory.service";
 
 async function startMQ() {
     const connection = await amqplib.connect("amqp://localhost:5672");
@@ -14,22 +15,33 @@ async function startMQ() {
     });
 
     await channel.bindQueue(queue.queue, "ecommerce.events", "order.created");
-    // await channel.bindQueue(queue.queue, "ecommerce.events", "inventory.release");
+    await channel.bindQueue(queue.queue, "ecommerce.events", "inventory.release");
 
-    channel.consume(queue.queue, (message) => {
+    channel.consume(queue.queue, async (message) => {
         if (!message) return;
 
-        const event = JSON.parse(message.content.toString());
+        try {
+            const routingKey = message.fields.routingKey;
+            const data = JSON.parse(message.content.toString());
+            console.log("Recieved: ", routingKey);
+            console.log("Data: ", data);
 
-        console.log(event);
+            switch (routingKey) {
+                case "order.created":
+                    await handleOrderCreate(data, channel);
+                    break;
 
-        channel.publish(
-            "ecommerce.events",
-            "inventory.failed",
-            Buffer.from(JSON.stringify(event)),
-        );
+                case "inventory.release":
+                    await handleInventoryRelease(data, channel);
+                    break;
 
-        channel.ack(message);
+                default:
+                    console.warn("Unknown routing key", routingKey);
+            }
+            channel.ack(message);
+        } catch (err: any) {
+            console.error("Inventory Error: ", err.message)
+        }
     });
 }
 
