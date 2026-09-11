@@ -3,15 +3,11 @@ import connectDB from "./config/db.js";
 import grpc, { type ServiceClientConstructor } from "@grpc/grpc-js";
 import protoLoader from "@grpc/proto-loader";
 import path from "path";
-import { fileURLToPath } from "url";
 import startMQ from "./events/rabbitmq.js";
 import { createUser } from "./services/user.service.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const packageDefinition = protoLoader.loadSync(
-    path.join(__dirname, "../../../proto/user.proto"),
+    path.join(process.cwd(), "proto/user.proto"),
     {
         keepCase: true,
         longs: String,

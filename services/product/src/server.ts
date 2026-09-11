@@ -1,14 +1,10 @@
 import "reflect-metadata";
-import startMQ from "./events/rabbitmq";
+import startMQ from "./events/rabbitmq.js";
 import grpc, { type ServiceClientConstructor } from "@grpc/grpc-js";
 import protoLoader from "@grpc/proto-loader";
 import path from "path";
-import { fileURLToPath } from "url";
-import { startORM, prod } from "./config/db";
-import { Product } from "./enitity/Product";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getProductRepository, startORM } from "./config/db.js";
+import { Product } from "./enitity/Product.js";
 
 const loaderOptions = {
     keepCase: true,
@@ -18,7 +14,7 @@ const loaderOptions = {
     oneofs: true,
 };
 const packageDefinition = protoLoader.loadSync(
-    path.join(__dirname, "../../../proto/product.proto"),
+    path.join(process.cwd(), "proto/product.proto"),
     loaderOptions,
 );
 const proto = grpc.loadPackageDefinition(packageDefinition);
@@ -32,11 +28,14 @@ async function CreateProduct(call: any, callback: any) {
     const { title, description, quantity, price } = call.request;
 
     try {
+        const prod = getProductRepository();
+
         const product = new Product();
         product.title = title;
         product.description = description;
         product.quantity = quantity;
         product.price = price;
+
         const newPrd = await prod.save(product);
         console.log("Product created successfully");
         console.log(newPrd);

@@ -6,7 +6,7 @@ import {
 
 async function startMQ() {
     const conn = await amqplib.connect(
-        process.env.RABBITMQ_URI || "amqp://localhost:5672",
+        process.env.RABBITMQ_URI || "amqp://rabbitmq:5672",
     );
     const channel = await conn.createChannel();
 

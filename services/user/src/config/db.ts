@@ -4,8 +4,8 @@ async function connectDB() {
     try {
         const conn = await mongoose.connect(
             process.env.MONGO_URI ||
-                "mongodb://127.0.0.1:27017/saga_user",
-            { replicaSet: "rs0" },
+                "mongodb://mongo:27017/saga_user",
+            { replicaSet: "rs0", directConnection: true },
         );
 
         console.log(`Mongodb connected: ${conn.connection.host}`);

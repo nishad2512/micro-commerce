@@ -2,15 +2,12 @@ import grpc from "@grpc/grpc-js";
 import protoLoader from "@grpc/proto-loader";
 import type { ServiceClientConstructor } from "@grpc/grpc-js";
 import path from "path";
-import { fileURLToPath } from "url";
 import startMQ from "./events/rabbitmq.js";
 import { createOrder } from "./services/order.service.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const packageDefinition = protoLoader.loadSync(
-    path.join(__dirname, "../../../proto/order.proto"),
+    path.join(process.cwd(), "proto/order.proto"),
     {
         keepCase: true,
         longs: String,

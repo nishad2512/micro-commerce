@@ -17,5 +17,53 @@ services:
     volumes:
       - mongo_data:/data/db
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "123"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  user-service:
+    build:
+      context: .
+      dockerfile: services/user/Dockerfile
+    image: ecommerce-user-service:latest
+    ports:
+      - "50052:50052"
+
+  product-service:
+    build: 
+      context: .
+      dockerfile: services/product/Dockerfile
+    image: ecommerce-product-service:latest
+    ports:
+      - "50053:50053"
+
+  order-service:
+    build: 
+      context: .
+      dockerfile: services/order/Dockerfile
+    image: ecommerce-order-service:latest
+    environment:
+      DATABASE_URL: postgresql://postgres:123@postgres:5432/saga_order
+      RABBITMQ_URL: amqp://rabbitmq:5672
+    ports:
+      - "50051:50051"
+
+  api-gateway:
+    build: 
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    image: ecommerce-api-gateway:latest
+    ports:
+      - "3000:3000"
+
 volumes:
   mongo_data:
+  postgres_data:

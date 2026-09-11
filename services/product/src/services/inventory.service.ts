@@ -1,8 +1,9 @@
 import amqplib from "amqplib";
-import { prod } from "../config/db";
+import { getProductRepository } from "../config/db.js";
 import { MoreThanOrEqual } from "typeorm";
 
 export async function handleOrderCreate(data: any, channel: amqplib.Channel) {
+    const prod = getProductRepository();
     for (let item of data.items) {
         const product = await prod.findOne({
             where: {
@@ -40,6 +41,7 @@ export async function handleInventoryRelease(
     data: any,
     channel: amqplib.Channel,
 ) {
+    const prod = getProductRepository();
     for (let item of data.items) {
         const product = await prod.findOne({
             where: { productId: item.prodId },

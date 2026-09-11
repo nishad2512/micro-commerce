@@ -1,8 +1,8 @@
 import amqplib from "amqplib";
-import { handleInventoryRelease, handleOrderCreate } from "../services/inventory.service";
+import { handleInventoryRelease, handleOrderCreate } from "../services/inventory.service.js";
 
 async function startMQ() {
-    const connection = await amqplib.connect("amqp://localhost:5672");
+    const connection = await amqplib.connect("amqp://rabbitmq:5672");
     const channel = await connection.createChannel();
 
     console.log("RabbitMQ started");

@@ -5,7 +5,8 @@ COPY services/order/package*.json ./
 RUN npm i
 
 COPY services/order/prisma ./prisma
-RUN npx prisma generate
+COPY services/order/prisma7.config.ts ./
+RUN DATABASE_URL="postgresql://postgres:123@localhost:5432/saga_order" npx prisma generate
 
 COPY services/order/tsconfig.json ./
 COPY services/order/src ./src
@@ -23,9 +24,9 @@ RUN npm i --omit=dev
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/proto ./proto
 
-COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma7.config.ts ./
 
 EXPOSE 50051
 
