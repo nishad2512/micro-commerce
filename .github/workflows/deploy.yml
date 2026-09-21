@@ -59,7 +59,8 @@ jobs:
       shell: powershell 
       run: |
         # Loop through each directory and update the image tags dynamically before applying
-        
+        kubectl apply -f app-secrets.yml
+        kubectl apply -f infrastructure.yml
         # 1. API Gateway (Windows friendly string replacement)
         (Get-Content services/api-gateway/k8s/deployment.yml) -replace 'image: ecommerce-api-gateway:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}" | Set-Content services/api-gateway/k8s/deployment.yml
         kubectl apply -f services/api-gateway/k8s/
