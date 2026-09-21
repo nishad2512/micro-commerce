@@ -1,0 +1,85 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api-gateway, order-service, user-service]
+        include:
+          - service: api-gateway
+            dockerfile: services/api-gateway/Dockerfile
+            image_name: ecommerce-api-gateway
+          - service: order-service
+            dockerfile: services/order/Dockerfile
+            image_name: ecommerce-order-service
+          - service: user-service
+            dockerfile: services/user/Dockerfile
+            image_name: ecommerce-user-service
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        file: ${{ matrix.dockerfile }}
+        push: true
+        tags: |
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:latest
+          ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Kubeconfig
+      uses: azure/k8s-set-context@v4
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBECONFIG }}
+
+    - name: Deploy Manifests
+      run: |
+        # Loop through each directory and update the image tags dynamically before applying
+        
+        # 1. API Gateway
+        sed -i "s|image: ecommerce-api-gateway:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}|g" services/api-gateway/k8s/deployment.yaml
+        kubectl apply -f services/api-gateway/k8s/
+        
+        # 2. User Service
+        sed -i "s|image: ecommerce-user-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-user-service:${{ github.sha }}|g" services/user/k8s/deployment.yaml
+        kubectl apply -f services/user/k8s/
+        
+        # 3. Order Service
+        sed -i "s|image: ecommerce-order-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}|g" services/order/k8s/deployment.yaml
+        kubectl apply -f services/order/k8s/
+
+        # Track the rollout status to ensure they catch configuration runtime failures
+        kubectl rollout status deployment/api-gateway --timeout=60s
+        kubectl rollout status deployment/user-service --timeout=60s
+        kubectl rollout status deployment/order-service --timeout=60s
+
+    - name: Rollback on Failure
+      if: failure()
+      run: |
+        echo "Deployment failed! Initiating automated rollback..."
+        kubectl rollout undo deployment/api-gateway
+        kubectl rollout undo deployment/user-service
+        kubectl rollout undo deployment/order-service
