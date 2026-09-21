@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY services/api-gateway/package*.json ./
 
-RUN npm ci
+RUN npm i
 
 COPY services/api-gateway/tsconfig.json ./
 COPY services/api-gateway/src ./src
@@ -20,7 +20,7 @@ WORKDIR /app
 
 COPY services/api-gateway/package*.json ./
 
-RUN npm ci --omit=dev
+RUN npm i --omit=dev
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/proto ./proto
