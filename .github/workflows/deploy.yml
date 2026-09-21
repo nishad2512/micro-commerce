@@ -56,7 +56,7 @@ jobs:
         kubeconfig: ${{ secrets.KUBECONFIG }}
 
     - name: Deploy Manifests
-      shell: pwsh
+      shell: powershell 
       run: |
         # Loop through each directory and update the image tags dynamically before applying
         
