@@ -56,19 +56,20 @@ jobs:
         kubeconfig: ${{ secrets.KUBECONFIG }}
 
     - name: Deploy Manifests
+      shell: pwsh
       run: |
         # Loop through each directory and update the image tags dynamically before applying
         
-        # 1. API Gateway
-        sed -i "s|image: ecommerce-api-gateway:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}|g" services/api-gateway/k8s/deployment.yml
+        # 1. API Gateway (Windows friendly string replacement)
+        (Get-Content services/api-gateway/k8s/deployment.yml) -replace 'image: ecommerce-api-gateway:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}" | Set-Content services/api-gateway/k8s/deployment.yml
         kubectl apply -f services/api-gateway/k8s/
         
         # 2. User Service
-        sed -i "s|image: ecommerce-user-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-user-service:${{ github.sha }}|g" services/user/k8s/deployment.yml
+        (Get-Content services/user/k8s/deployment.yml) -replace 'image: ecommerce-user-service:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-user-service:${{ github.sha }}" | Set-Content services/user/k8s/deployment.yml
         kubectl apply -f services/user/k8s/
         
         # 3. Order Service
-        sed -i "s|image: ecommerce-order-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}|g" services/order/k8s/deployment.yml
+        (Get-Content services/order/k8s/deployment.yml) -replace 'image: ecommerce-order-service:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}" | Set-Content services/order/k8s/deployment.yml
         kubectl apply -f services/order/k8s/
 
         # Track the rollout status to ensure they catch configuration runtime failures
