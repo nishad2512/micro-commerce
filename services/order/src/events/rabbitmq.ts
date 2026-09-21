@@ -5,11 +5,15 @@ import {
     handlePaymentSuccess,
 } from "../services/msg.service.js";
 
+let mqchannel: null | amqplib.Channel = null;
+
 async function startMQ() {
     const connection = await amqplib.connect(
         process.env.RABBITMQ_URL || "amqp://localhost:5672",
     );
     const channel = await connection.createChannel();
+
+    mqchannel = channel;
 
     console.log("RabbitMQ connected in order services");
 
@@ -52,8 +56,13 @@ async function startMQ() {
             console.error("Error Order RabbitMQ: ", err.message);
         }
     });
+}
 
-    return channel;
+export const getChannel = () => {
+    if (!mqchannel) {
+        throw new Error("RabbitMQ channel has not been initialized yet. Call startMQ() first.");
+    }
+    return mqchannel;
 }
 
 export default startMQ;

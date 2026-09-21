@@ -29,5 +29,6 @@ COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma7.config.ts ./
 
 EXPOSE 50051
+EXPOSE 3002
 
 CMD ["sh", "-c", "npx prisma migrate deploy && node dist/server.js"]

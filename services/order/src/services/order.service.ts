@@ -1,4 +1,5 @@
 import prisma from "../lib/prisma.js";
+import { Status } from "../generated/prisma/enums.js";
 
 export const cancelOrder = async (orderId: number) => {
     try {
@@ -15,45 +16,83 @@ export const cancelOrder = async (orderId: number) => {
 };
 
 export const createOrder = async (data: any) => {
-    try {
-        const transactionResult = await prisma.$transaction(async (tx) => {
-            let orderTotal = 0;
-            const itemsData = [];
+    const transactionResult = await prisma.$transaction(async (tx) => {
+        let orderTotal = 0;
+        const itemsData = [];
 
-            for (const item of data.items) {
-                const itemSubtotal = item.price * item.quantity;
-                orderTotal += itemSubtotal;
+        for (const item of data.items) {
+            const itemSubtotal = item.price * item.quantity;
+            orderTotal += itemSubtotal;
 
-                itemsData.push({
-                    prodId: parseInt(item.prodId),
-                    quantity: parseInt(item.quantity),
-                    price: parseFloat(item.price),
-                });
-            }
-
-            const order = await tx.order.create({
-                data: {
-                    userId: data.userId,
-                    items: {
-                        create: itemsData,
-                    },
-                    total: orderTotal,
-                },
+            itemsData.push({
+                prodId: parseInt(item.prodId),
+                quantity: parseInt(item.quantity),
+                price: parseFloat(item.price),
             });
+        }
 
-            return {
-                orderId: order.orderId,
-                userId: order.userId,
-                total: order.total,
-                items: itemsData,
-            };
+        const order = await tx.order.create({
+            data: {
+                userId: data.userId,
+                items: {
+                    create: itemsData,
+                },
+                total: orderTotal,
+            },
         });
 
-        console.log(transactionResult);
+        return {
+            orderId: order.orderId,
+            userId: order.userId,
+            total: order.total,
+            items: itemsData,
+        };
+    });
 
-        return { success: true, transactionResult };
-    } catch (err: any) {
-        console.error(err.message);
-        return { success: false, message: err.message };
-    }
+    console.log(transactionResult);
+
+    return { success: true, transactionResult };
+};
+
+export const getOrdersByUser = async (userId: string) => {
+    const orders = await prisma.order.findMany({
+        where: {
+            userId: userId,
+        },
+        include: {
+            items: true,
+        },
+        orderBy: {
+            createdAt: "desc",
+        },
+    });
+
+    return orders;
+};
+
+export const getOrderById = async (orderId: string, userId: string) => {
+    const order = await prisma.order.findUnique({
+        where: {
+            orderId: parseInt(orderId),
+            userId: userId,
+        },
+        include: {
+            items: true,
+        },
+    });
+
+    return order;
+};
+
+export const updateOrderStatus = async (orderId: string, newStatus: Status) => {
+    const updatedOrder = await prisma.order.update({
+        where: {
+            orderId: parseInt(orderId),
+        },
+        data: {
+            status: newStatus,
+        },
+    });
+
+    return updatedOrder;
 };

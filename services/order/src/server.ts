@@ -3,8 +3,12 @@ import protoLoader from "@grpc/proto-loader";
 import type { ServiceClientConstructor } from "@grpc/grpc-js";
 import path from "path";
 import startMQ from "./events/rabbitmq.js";
-import { createOrder } from "./services/order.service.js";
+import express from "express";
+import { CreateOrder } from "./controllers/order.controller.js";
+import orderRoutes from "./routes/order.routes.js";
 
+const app = express();
+const PORT = process.env.PORT || 3002;
 
 const packageDefinition = protoLoader.loadSync(
     path.join(process.cwd(), "proto/order.proto"),
@@ -24,46 +28,32 @@ const OrderService = (proto.order as any)
 
 // RabbitMQ connection
 
-const channel = await startMQ();
+await startMQ();
 
-const dummy = {
-    success: true,
-    transactionResult: {
-        orderId: "1234",
-        userId: "5678",
-        total: 5600,
-        items: [
-            { prodId: "123", qnty: 4, price: 430 },
-            { prodId: "325", qnty: 2, price: 360 },
-            { prodId: "847", qnty: 6, price: 710 },
-        ],
-    },
-};
+// const dummy = {
+//     success: true,
+//     transactionResult: {
+//         orderId: "1234",
+//         userId: "5678",
+//         total: 5600,
+//         items: [
+//             { prodId: "123", qnty: 4, price: 430 },
+//             { prodId: "325", qnty: 2, price: 360 },
+//             { prodId: "847", qnty: 6, price: 710 },
+//         ],
+//     },
+// };
 
-async function CreateOrder(call: any, callback: any) {
-    const res: { success: boolean; transactionResult?: any; message?: string } =
-       // dummy;
-     await createOrder(call.request);
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-    if (res.success) {
-        channel.publish(
-            "ecommerce.events",
-            "order.created",
-            Buffer.from(JSON.stringify(res.transactionResult)),
-            { persistent: true },
-        );
-
-        callback(null, { ...res.transactionResult });
-    } else {
-        console.error(res.message);
-        callback({
-            code: grpc.status.ABORTED,
-            message: res.message,
-        });
-    }
-}
+app.use("/orders", orderRoutes);
 
 function startServer() {
+    app.listen(PORT, () => {
+        console.log(`Order [api] running on port ${PORT}`);
+    });
+
     const server = new grpc.Server();
 
     server.addService(OrderService.service, { CreateOrder });
@@ -76,7 +66,7 @@ function startServer() {
                 return;
             }
 
-            console.log(`Order service running on port ${port}`);
+            console.log(`Order [gRPC] running on port ${port}`);
         },
     );
 }
