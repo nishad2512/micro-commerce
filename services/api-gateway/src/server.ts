@@ -64,55 +64,35 @@ const prodClient: any = createGrpcClient(
 );
 
 // middlewares
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(globalLimiter);
 app.use(morgan("tiny"));
 
-// routes
-
-app.post("/api/orders", verifyUser, (req: any, res: any) => {
-    const { items } = req.body;
-    const userId = req.user.id;
-    try {
-        orderClient.CreateOrder({ userId, items }, (err: any, result: any) => {
-            if (err) {
-                return res
-                    .status(400)
-                    .json({ success: false, message: err.message });
-            }
-            console.log(result);
-            res.status(200).json(result);
-        });
-    } catch (err: any) {
-        console.error(err.message);
-    }
-});
-
+app.use(userProxy);
 app.use(orderProxy);
 
-app.post("/api/auth/register", (req, res) => {
-    const { name, email, password } = req.body;
-    try {
-        userClient.CreateUser(
-            { name, email, password },
-            (err: any, result: any) => {
-                if (err) {
-                    return res
-                        .status(400)
-                        .json({ success: false, message: err.message });
-                }
-                console.log(result);
-                res.status(200).json(result);
-            },
-        );
-    } catch (err: any) {
-        console.error(err.message);
-    }
-});
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(userProxy);
+// routes
+
+// app.post("/api/orders", verifyUser, (req: any, res: any) => {
+//     const { items } = req.body;
+//     const userId = req.user.id;
+//     try {
+//         orderClient.CreateOrder({ userId, items }, (err: any, result: any) => {
+//             if (err) {
+//                 return res
+//                     .status(400)
+//                     .json({ success: false, message: err.message });
+//             }
+//             console.log(result);
+//             res.status(200).json(result);
+//         });
+//     } catch (err: any) {
+//         console.error(err.message);
+//     }
+// });
+
 
 app.post("/api/products", (req, res) => {
     const { title, description, quantity, price } = req.body;

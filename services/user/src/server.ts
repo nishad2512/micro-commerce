@@ -4,9 +4,11 @@ import grpc, { type ServiceClientConstructor } from "@grpc/grpc-js";
 import protoLoader from "@grpc/proto-loader";
 import path from "path";
 import startMQ from "./events/rabbitmq.js";
-import { createUser, meRPC } from "./services/user.service.js";
 import express from "express";
 import authRoutes from "./routes/auth.routes.js";
+import { GrpcController } from "./controllers/grpc.controller.js";
+import { UserRepo } from "./repositories/user.repository.js";
+import { UserService as service } from "./services/user.service.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,7 +41,11 @@ function startServer() {
 
     const server = new grpc.Server();
 
-    server.addService(UserService.service, { CreateUser: createUser, GetUser: meRPC });
+    const repo = new UserRepo();
+    const serv = new service(repo);
+    const controller = new GrpcController(serv);
+
+    server.addService(UserService.service, { GetUser: controller.me });
     server.bindAsync(
         "0.0.0.0:50052",
         grpc.ServerCredentials.createInsecure(),

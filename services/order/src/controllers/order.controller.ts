@@ -7,7 +7,7 @@ import {
     getOrdersByUser,
     updateOrderStatus,
 } from "../services/order.service.js";
-import grpc from "@grpc/grpc-js";
+// import grpc from "@grpc/grpc-js";
 
 const userClient: any = createGrpcClient(
     "proto/user.proto",
@@ -15,29 +15,51 @@ const userClient: any = createGrpcClient(
     "user-service:50052",
 );
 
-export async function CreateOrder(call: any, callback: any) {
-    try {
-        const res: {
-            success: boolean;
-            transactionResult?: any;
-            message?: string;
-        } = await createOrder(call.request);
+// export async function CreateOrder(call: any, callback: any) {
+//     try {
+//         const res: {
+//             success: boolean;
+//             transactionResult?: any;
+//             message?: string;
+//         } = await createOrder(call.request);
 
+//         const channel = getChannel();
+
+//         channel.publish(
+//             "ecommerce.events",
+//             "order.created",
+//             Buffer.from(JSON.stringify(res.transactionResult)),
+//             { persistent: true },
+//         );
+
+//         callback(null, { ...res.transactionResult });
+//     } catch (err: any) {
+//         console.error(err.message);
+//         callback({
+//             code: grpc.status.ABORTED,
+//             message: err.message,
+//         });
+//     }
+// }
+
+export async function create(req: any, res: any) {
+    try {
+        const result = await createOrder(req.body);
         const channel = getChannel();
 
         channel.publish(
             "ecommerce.events",
             "order.created",
-            Buffer.from(JSON.stringify(res.transactionResult)),
+            Buffer.from(JSON.stringify(result.transactionResult)),
             { persistent: true },
         );
 
-        callback(null, { ...res.transactionResult });
+        res.json(result);
     } catch (err: any) {
         console.error(err.message);
-        callback({
-            code: grpc.status.ABORTED,
-            message: err.message,
+        res.status(400).json({
+            success: false,
+            message: err.message || "Order creation failed",
         });
     }
 }

@@ -4,7 +4,6 @@ import type { ServiceClientConstructor } from "@grpc/grpc-js";
 import path from "path";
 import startMQ from "./events/rabbitmq.js";
 import express from "express";
-import { CreateOrder } from "./controllers/order.controller.js";
 import orderRoutes from "./routes/order.routes.js";
 
 const app = express();
@@ -30,20 +29,6 @@ const OrderService = (proto.order as any)
 
 await startMQ();
 
-// const dummy = {
-//     success: true,
-//     transactionResult: {
-//         orderId: "1234",
-//         userId: "5678",
-//         total: 5600,
-//         items: [
-//             { prodId: "123", qnty: 4, price: 430 },
-//             { prodId: "325", qnty: 2, price: 360 },
-//             { prodId: "847", qnty: 6, price: 710 },
-//         ],
-//     },
-// };
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -56,7 +41,6 @@ function startServer() {
 
     const server = new grpc.Server();
 
-    server.addService(OrderService.service, { CreateOrder });
     server.bindAsync(
         "0.0.0.0:50051",
         grpc.ServerCredentials.createInsecure(),
