@@ -45,7 +45,7 @@ function startServer() {
     const serv = new service(repo);
     const controller = new GrpcController(serv);
 
-    server.addService(UserService.service, { GetUser: controller.me });
+    server.addService(UserService.service, { GetUser: controller.me.bind(controller) });
     server.bindAsync(
         "0.0.0.0:50052",
         grpc.ServerCredentials.createInsecure(),

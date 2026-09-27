@@ -21,8 +21,7 @@ spec:
     spec:
       containers:
       - name: order-service
-        image: ecommerce-order-service:latest
-        imagePullPolicy: Never
+        image: nishadmp/ecommerce-order-service:latest
         ports:
         - containerPort: 50051
         - containerPort: 3002

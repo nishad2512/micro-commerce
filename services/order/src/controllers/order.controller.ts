@@ -44,7 +44,9 @@ const userClient: any = createGrpcClient(
 
 export async function create(req: any, res: any) {
     try {
-        const result = await createOrder(req.body);
+        const userId = req.user.id
+        const {items} = req.body
+        const result = await createOrder({ userId, items });
         const channel = getChannel();
 
         channel.publish(

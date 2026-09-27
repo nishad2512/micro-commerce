@@ -42,7 +42,7 @@ jobs:
           ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image_name }}:${{ github.sha }}
 
   deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     needs: build-and-push
     
     steps:
@@ -56,24 +56,24 @@ jobs:
         kubeconfig: ${{ secrets.KUBECONFIG }}
 
     - name: Deploy Manifests
-      shell: powershell 
       run: |
-        # Loop through each directory and update the image tags dynamically before applying
+        # Apply standard system properties first
         kubectl apply -f app-secrets.yml
         kubectl apply -f infrastructure.yml
-        # 1. API Gateway (Windows friendly string replacement)
-        (Get-Content services/api-gateway/k8s/deployment.yml) -replace 'image: ecommerce-api-gateway:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}" | Set-Content services/api-gateway/k8s/deployment.yml
+
+        # 1. API Gateway
+        sed -i "s|image: ecommerce-api-gateway:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-api-gateway:${{ github.sha }}|g" services/api-gateway/k8s/deployment.yml
         kubectl apply -f services/api-gateway/k8s/
         
         # 2. User Service
-        (Get-Content services/user/k8s/deployment.yml) -replace 'image: ecommerce-user-service:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-user-service:${{ github.sha }}" | Set-Content services/user/k8s/deployment.yml
+        sed -i "s|image: ecommerce-user-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-user-service:${{ github.sha }}|g" services/user/k8s/deployment.yml
         kubectl apply -f services/user/k8s/
         
         # 3. Order Service
-        (Get-Content services/order/k8s/deployment.yml) -replace 'image: ecommerce-order-service:latest', "image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}" | Set-Content services/order/k8s/deployment.yml
+        sed -i "s|image: ecommerce-order-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}|g" services/order/k8s/deployment.yml
         kubectl apply -f services/order/k8s/
 
-        # Track the rollout status to ensure they catch configuration runtime failures
+        # Track the rollout status to catch configuration runtime failures
         kubectl rollout status deployment/api-gateway --timeout=60s
         kubectl rollout status deployment/user-service --timeout=60s
         kubectl rollout status deployment/order-service --timeout=60s

@@ -21,7 +21,6 @@ spec:
     spec:
       containers:
       - name: api-gateway
-        image: ecommerce-api-gateway:latest
-        imagePullPolicy: Never
+        image: nishadmp/ecommerce-api-gateway:latest
         ports:
         - containerPort: 3000
