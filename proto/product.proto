@@ -4,7 +4,13 @@ package product;
 
 service ProductService {
     rpc CreateProduct (dto) returns (Product);
+    rpc GetProduct (GetProductRequest) returns (Product);
+    rpc ListProducts (ListProductsRequest) returns (ProductList);
 }
+
+message GetProductRequest { int32 productId = 1; }
+message ListProductsRequest { int32 page = 1; int32 limit = 2; }
+message ProductList { repeated Product products = 1; int32 total = 2; }
 
 message dto {
     string title = 1;

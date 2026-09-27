@@ -1,151 +1,42 @@
+import type { NextFunction, Request, Response } from "express";
 import { getChannel } from "../events/rabbitmq.js";
 import { Status } from "../generated/prisma/enums.js";
-import createGrpcClient from "../grpc/client.js";
-import {
-    createOrder,
-    getOrderById,
-    getOrdersByUser,
-    updateOrderStatus,
-} from "../services/order.service.js";
-// import grpc from "@grpc/grpc-js";
+import { createOrder, getAllOrders, getOrderById, getOrdersByUser, updateOrderStatus } from "../services/order.service.js";
+import { CreateOrderSchema, UpdateOrderSchema } from "../validators/order.validator.js";
+import { AuthorizationError } from "../errors/app-error.js";
 
-const userClient: any = createGrpcClient(
-    "proto/user.proto",
-    "user.UserService",
-    "user-service:50052",
-);
-
-// export async function CreateOrder(call: any, callback: any) {
-//     try {
-//         const res: {
-//             success: boolean;
-//             transactionResult?: any;
-//             message?: string;
-//         } = await createOrder(call.request);
-
-//         const channel = getChannel();
-
-//         channel.publish(
-//             "ecommerce.events",
-//             "order.created",
-//             Buffer.from(JSON.stringify(res.transactionResult)),
-//             { persistent: true },
-//         );
-
-//         callback(null, { ...res.transactionResult });
-//     } catch (err: any) {
-//         console.error(err.message);
-//         callback({
-//             code: grpc.status.ABORTED,
-//             message: err.message,
-//         });
-//     }
-// }
-
-export async function create(req: any, res: any) {
-    try {
-        const userId = req.user.id
-        const {items} = req.body
-        const result = await createOrder({ userId, items });
-        const channel = getChannel();
-
-        channel.publish(
-            "ecommerce.events",
-            "order.created",
-            Buffer.from(JSON.stringify(result.transactionResult)),
-            { persistent: true },
-        );
-
-        res.json(result);
-    } catch (err: any) {
-        console.error(err.message);
-        res.status(400).json({
-            success: false,
-            message: err.message || "Order creation failed",
-        });
-    }
-}
-
-export const getOrders = async (req: any, res: any) => {
-    try {
-        const result = await getOrdersByUser(req.user.id);
-
-        res.status(200).json({ orders: result });
-    } catch (err: any) {
-        console.error(err.message);
-        res.status(400).json({
-            success: false,
-            message: err.message || "Getting orders failed",
-        });
-    }
+const orderId = (value: string | string[] | undefined): number => {
+    const parsed = Number(value);
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error("Order id must be a positive integer");
+    return parsed;
 };
 
-export const getOrder = async (req: any, res: any) => {
+export const create = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const order = await getOrderById(req.params.id, req.user.id);
-        if (!order) {
-            return res
-                .status(403)
-                .json({ success: false, message: "Invalid order" });
-        }
-
-        res.status(200).json(order);
-    } catch (err: any) {
-        console.error(err.message);
-        res.status(400).json({
-            success: false,
-            message: err.message || "Getting orders failed",
-        });
-    }
+        const event = await createOrder(req.user!.sub, CreateOrderSchema.parse(req.body));
+        getChannel().publish("ecommerce.events", "order.created", Buffer.from(JSON.stringify(event)), { persistent: true, contentType: "application/json", messageId: `order.created:${event.orderId}` });
+        res.status(201).json({ success: true, message: "Order created", data: event });
+    } catch (error) { next(error); }
 };
 
-export const updateOrder = async (req: any, res: any) => {
+export const getOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        await new Promise<void>((resolve, reject) => {
-            userClient.GetUser(
-                { userId: req.user.id },
-                (err: any, result: any) => {
-                    if (err) {
-                        return reject({ status: 400, message: err.message });
-                    }
+        const orders = req.user!.role === "admin" ? await getAllOrders() : await getOrdersByUser(req.user!.sub);
+        res.status(200).json({ success: true, data: orders });
+    } catch (error) { next(error); }
+};
 
-                    console.log(result);
-                    if (result.role !== "admin") {
-                        return reject({
-                            status: 403,
-                            message: "Unauthorized User",
-                        });
-                    }
+export const getOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        const userId = req.user!.role === "admin" ? undefined : req.user!.sub;
+        res.status(200).json({ success: true, data: await getOrderById(orderId(req.params.id), userId) });
+    } catch (error) { next(error); }
+};
 
-                    resolve();
-                },
-            );
-        });
-
-        const status = req.body.status;
-        const validStatuses = Object.values(Status) as string[];
-
-        if (!validStatuses.includes(status)) {
-            return res.status(400).json({
-                error: `Invalid status. Must be one of: ${validStatuses.join(", ")}`,
-            });
-        }
-
-        const result = await updateOrderStatus(req.params.id, status as Status);
-
-        return res.status(200).json(result);
-    } catch (err: any) {
-        console.error(err.message || err);
-
-        if (err.status) {
-            return res
-                .status(err.status)
-                .json({ success: false, message: err.message });
-        }
-
-        return res.status(400).json({
-            success: false,
-            message: err.message || "Order updation failed",
-        });
-    }
+export const updateOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+        if (req.user!.role !== "admin") throw new AuthorizationError();
+        const { status } = UpdateOrderSchema.parse(req.body);
+        res.status(200).json({ success: true, data: await updateOrderStatus(orderId(req.params.id), status as Status) });
+    } catch (error) { next(error); }
 };

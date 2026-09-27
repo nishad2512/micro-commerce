@@ -1,123 +1,103 @@
-import express from "express";
-import createGrpcClient from "./grpc/client.js";
-import { verifyUser } from "./middlewares/auth.middleware.js";
+import express, {
+    type NextFunction,
+    type Request,
+    type Response,
+} from "express";
+import cors from "cors";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT ?? 3000);
 
-const userProxy = createProxyMiddleware({
-    target: "http://user-service:3001",
-    changeOrigin: true,
-    pathFilter: ["/api/auth", "/api/users"],
-    pathRewrite: {
-        "^/api": "",
-    },
-});
+// 1. Tell Express to trust upstream headers (Crucial for Rate Limiting behind proxies)
+app.set("trust proxy", 1);
 
-const orderProxy = createProxyMiddleware({
-    target: "http://order-service:3002",
-    changeOrigin: true,
-    pathFilter: "/api/orders",
-    pathRewrite: {
-        "^/api": "",
-    },
-});
+// 2. Configure CORS Options explicitly
+const corsOptions = {
+    origin: process.env.FRONTEND_URL?.split(",") ?? ["http://localhost:5173"],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+};
 
-// const productProxy = createProxyMiddleware({
-//     target: "http://product-service:3002",
-//     changeOrigin: true,
-//     pathFilter: "/api/products",
-//     pathRewrite: {
-//         "^/api": "",
-//     },
-// });
+// 3. Apply CORS globally
+app.use(cors(corsOptions));
 
-const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 100,
-    message: "Too many requests from this IP, please try again later.",
-    standardHeaders: "draft-8",
-    legacyHeaders: false,
-});
+// 4. Force respond 204 to PREFLIGHT (OPTIONS) requests immediately
+// This prevents http-proxy-middleware from hijacking the preflight request
+// app.options("*path", cors(corsOptions));
 
-// grpc client
-
-const orderClient: any = createGrpcClient(
-    "proto/order.proto",
-    "order.OrderService",
-    "order-service:50051",
-);
-
-const userClient: any = createGrpcClient(
-    "proto/user.proto",
-    "user.UserService",
-    "user-service:50052",
-);
-
-const prodClient: any = createGrpcClient(
-    "proto/product.proto",
-    "product.ProductService",
-    "product-service:50053",
-);
-
-// middlewares
-app.use(globalLimiter);
+// 5. Global Middlewares
+// app.use(express.json({ limit: "100kb" }));
 app.use(morgan("tiny"));
 
-app.use(userProxy);
-app.use(orderProxy);
+app.use(
+    rateLimit({
+        windowMs: 15 * 60 * 1000,
+        limit: 100,
+        standardHeaders: "draft-8",
+        legacyHeaders: false,
+        handler: (_req, res) =>
+            res.status(429).json({
+                success: false,
+                message: "Too many requests. Please try again later.",
+            }),
+    }),
+);
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// 6. Base Routes
+app.get("/health", (_req, res) =>
+    res.status(200).json({ success: true, data: { status: "ok" } }),
+);
+app.get("/ready", (_req, res) =>
+    res.status(200).json({ success: true, data: { ready: true } }),
+);
 
-// routes
+// 7. Proxies (Note: corrected 'timeout' to 'connectTimeout' for v3.x compatibility)
+app.use(
+    createProxyMiddleware({
+        target: process.env.USER_SERVICE_URL ?? "http://user-service:3001",
+        pathFilter: ["/api/auth", "/api/users"],
+        changeOrigin: true,
+        pathRewrite: { "^/api": "" },
+        proxyTimeout: 10_000,
+        timeout: 10_000,
+    }),
+);
 
-// app.post("/api/orders", verifyUser, (req: any, res: any) => {
-//     const { items } = req.body;
-//     const userId = req.user.id;
-//     try {
-//         orderClient.CreateOrder({ userId, items }, (err: any, result: any) => {
-//             if (err) {
-//                 return res
-//                     .status(400)
-//                     .json({ success: false, message: err.message });
-//             }
-//             console.log(result);
-//             res.status(200).json(result);
-//         });
-//     } catch (err: any) {
-//         console.error(err.message);
-//     }
-// });
+app.use(
+    createProxyMiddleware({
+        target:
+            process.env.PRODUCT_SERVICE_URL ?? "http://product-service:3003",
+        pathFilter: "/api/products",
+        changeOrigin: true,
+        pathRewrite: { "^/api": "" },
+        proxyTimeout: 10_000,
+        timeout: 10_000,
+    }),
+);
 
+app.use(
+    createProxyMiddleware({
+        target: process.env.ORDER_SERVICE_URL ?? "http://order-service:3002",
+        pathFilter: "/api/orders",
+        changeOrigin: true,
+        pathRewrite: { "^/api": "" },
+        proxyTimeout: 15_000,
+        timeout: 15_000,
+    }),
+);
 
-app.post("/api/products", (req, res) => {
-    const { title, description, quantity, price } = req.body;
-    try {
-        prodClient.CreateProduct(
-            { title, description, quantity, price },
-            (err: any, result: any) => {
-                if (err) {
-                    return res
-                        .status(400)
-                        .json({ success: false, message: err.message });
-                }
-                console.log(result);
-                res.status(200).json(result);
-            },
-        );
-    } catch (err: any) {
-        console.error(err.message);
-    }
+// 8. Error Handler
+app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("Gateway error", error);
+    res.status(502).json({
+        success: false,
+        message: "A downstream service is unavailable",
+        error: { code: "BAD_GATEWAY" },
+    });
 });
 
-// app.use(productProxy);
-
-// server listen
-
-app.listen(PORT, () => {
-    console.log(`API Gateway running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`API Gateway running on port ${PORT}`));

@@ -10,9 +10,13 @@ const repository = new UserRepo();
 const service = new UserService(repository)
 const controller = new UserController(service);
 
-router.post("/auth/register", (req, res) => controller.register(req, res));
-router.post("/auth/login", (req, res) => controller.login(req, res));
-router.get("/users/me", verifyUser, (req, res) => controller.me(req, res));
-router.get("/users/:id", verifyUser, adminOnly, (req, res) => controller.userData(req, res));
+router.post("/auth/register", controller.register);
+router.post("/auth/login", controller.login);
+router.post("/auth/refresh", controller.refresh);
+router.post("/auth/logout", controller.logout);
+router.get("/users/me", verifyUser, controller.me);
+router.get("/users/me/wallet", verifyUser, controller.wallet);
+router.post("/users/me/wallet/top-up", verifyUser, controller.topUpWallet);
+router.get("/users/:id", verifyUser, adminOnly, controller.userData);
 
 export default router;

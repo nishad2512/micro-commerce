@@ -17,12 +17,12 @@ async function startMQ() {
 
     console.log("RabbitMQ connected in order services");
 
-    channel.assertExchange("ecommerce.events", "topic", { durable: true });
-    const queue = await channel.assertQueue("order.queue");
+    await channel.assertExchange("ecommerce.events", "topic", { durable: true });
+    const queue = await channel.assertQueue("order.queue", { durable: true });
 
-    channel.bindQueue(queue.queue, "ecommerce.events", "inventory.failed");
-    channel.bindQueue(queue.queue, "ecommerce.events", "payment.success");
-    channel.bindQueue(queue.queue, "ecommerce.events", "payment.failed");
+    await channel.bindQueue(queue.queue, "ecommerce.events", "inventory.failed");
+    await channel.bindQueue(queue.queue, "ecommerce.events", "payment.success");
+    await channel.bindQueue(queue.queue, "ecommerce.events", "payment.failed");
 
     channel.consume(queue.queue, async (msg) => {
         if (!msg) return;
@@ -52,8 +52,9 @@ async function startMQ() {
             }
 
             channel.ack(msg);
-        } catch (err: any) {
-            console.error("Error Order RabbitMQ: ", err.message);
+        } catch (err) {
+            console.error("Error Order RabbitMQ: ", err instanceof Error ? err.message : err);
+            channel.nack(msg, false, false);
         }
     });
 }

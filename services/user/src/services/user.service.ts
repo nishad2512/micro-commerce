@@ -1,106 +1,172 @@
-import mongoose from "mongoose";
-import { User, Wallet } from "../models/User.js";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-import type { createDTO, IUserRepo } from "../interfaces/repo.interface.js";
+import crypto from "node:crypto";
+import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
+import type { IUserRepo } from "../interfaces/repo.interface.js";
+import type { IUserServ, UserD } from "../interfaces/serv.interface.js";
+import type { WalletData } from "../models/User.js";
+import {
+    AuthenticationError,
+    ConflictError,
+    NotFoundError,
+} from "../errors/app-error.js";
 import type {
-    IUserServ,
-    loginDTO,
-    loginRes,
-    UserD,
-} from "../interfaces/serv.interface.js";
+    LoginInput,
+    RegisterInput,
+} from "../validators/auth.validator.js";
+import type { WalletTopUpInput } from "../validators/wallet.validator.js";
 
-// express
+export interface AuthResult {
+    accessToken: string;
+    refreshToken: string;
+    user: UserD;
+}
+type TokenPayload = JwtPayload & { sub: string; role: "user" | "admin" };
 
-export const loginUser = async (data: any) => {
-    const { email, password } = data;
-    const user = await User.findOne({ email });
-    if (!user) {
-        throw new Error("User not found!");
-    }
-    if (!(await bcrypt.compare(password, user.password))) {
-        throw new Error("Invalid credentials!");
-    }
-    const token = jwt.sign(
-        { id: user?._id, role: user?.role },
-        process.env.JWT_SECRET || "secret",
-        { expiresIn: "24h" },
-    );
-
-    return { token, userId: user._id, role: user.role };
+const requireSecret = (name: string): string => {
+    const value = process.env[name];
+    if (!value || value.length < 6)
+        throw new Error(
+            `${name} must be configured with at least 6 characters`,
+        );
+    return value;
 };
-
-export const userDetails = async (userId?: string) => {
-    if (!userId) {
-        throw new Error("UserID not provided");
-    }
-    const user = await User.findById(userId);
-    if (!user) {
-        throw new Error("User not found");
-    }
-    return {
-        userId,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-    };
-};
+const hashToken = (token: string): string =>
+    crypto.createHash("sha256").update(token).digest("hex");
+const sign = (
+    payload: TokenPayload,
+    secret: string,
+    expiresIn: string,
+): string => jwt.sign(payload, secret, { expiresIn } as SignOptions);
 
 export class UserService implements IUserServ {
-    constructor(private repo: IUserRepo) {}
+    constructor(private readonly repo: IUserRepo) {}
 
-    async login(data: loginDTO): Promise<loginRes> {
-        const { email, password } = data;
-        const user = await this.repo.findUserByEmail(email);
-        if (!user) {
-            throw new Error("User not found!");
-        }
-        if (!(await bcrypt.compare(password, user.password))) {
-            throw new Error("Invalid credentials!");
-        }
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET || "secret",
-            { expiresIn: "24h" },
+    async login(data: LoginInput): Promise<AuthResult> {
+        const user = await this.repo.findUserByEmail(data.email);
+        if (!user || !(await bcrypt.compare(data.password, user.password)))
+            throw new AuthenticationError("Invalid email or password");
+        return this.createSession(
+            user.id as string,
+            user.role,
+            user.name,
+            user.email,
         );
+    }
 
-        return { token, userId: user.id as string, role: user.role };
+    async registerUser(data: RegisterInput): Promise<AuthResult> {
+        if (await this.repo.findUserByEmail(data.email))
+            throw new ConflictError(
+                "An account with this email already exists",
+            );
+        const user = await this.repo.createUser({
+            ...data,
+            password: await bcrypt.hash(data.password, 12),
+        });
+        await this.repo.createWallet(user.id as string);
+        return this.createSession(
+            user.id as string,
+            user.role,
+            user.name,
+            user.email,
+        );
+    }
+
+    async refresh(refreshToken: string): Promise<AuthResult> {
+        const payload = this.verifyRefresh(refreshToken);
+        if (
+            !(await this.repo.hasRefreshToken(
+                payload.sub,
+                hashToken(refreshToken),
+            ))
+        )
+            throw new AuthenticationError("Refresh token is no longer valid");
+        const user = await this.userDetails(payload.sub);
+        const next = this.issueTokens(user.id as string, user.role);
+        if (
+            !(await this.repo.replaceRefreshToken(
+                payload.sub,
+                hashToken(refreshToken),
+                hashToken(next.refreshToken),
+            ))
+        )
+            throw new AuthenticationError("Refresh token is no longer valid");
+        return { ...next, user };
+    }
+
+    async logout(refreshToken: string | undefined): Promise<void> {
+        if (!refreshToken) return;
+        try {
+            const payload = this.verifyRefresh(refreshToken);
+            await this.repo.removeRefreshToken(
+                payload.sub,
+                hashToken(refreshToken),
+            );
+        } catch {
+            /* Logout is intentionally idempotent. */
+        }
     }
 
     async userDetails(userId: string): Promise<UserD> {
-        if (!userId) {
-            throw new Error("UserID not provided");
-        }
         const user = await this.repo.findUserById(userId);
-        if (!user) {
-            throw new Error("User not found");
-        }
+        if (!user) throw new NotFoundError("User not found");
         return {
-            id: userId,
+            id: user.id as string,
             name: user.name,
             email: user.email,
             role: user.role,
         };
     }
 
-    async registerUser(data: createDTO): Promise<string> {
-        const { name, email, password } = data;
-        const passHash = await bcrypt.hash(password, 12);
+    async walletDetails(userId: string): Promise<WalletData> {
+        const wallet = await this.repo.findWalletByUserId(userId);
+        if (!wallet) throw new NotFoundError("Wallet not found");
+        return wallet;
+    }
 
-        const user = await this.repo.createUser({
-            name,
-            email,
-            password: passHash,
-        });
+    async topUpWallet(userId: string, data: WalletTopUpInput): Promise<WalletData> {
+        const wallet = await this.repo.addWalletFunds(userId, data.amount);
+        if (!wallet) throw new NotFoundError("Wallet not found");
+        return wallet;
+    }
 
-        const token = jwt.sign(
-            { id: user.id, role: user.role },
-            process.env.JWT_SECRET || "secret",
-            { expiresIn: "24h" },
-        );
+    private async createSession(
+        id: string,
+        role: "user" | "admin",
+        name: string,
+        email: string,
+    ): Promise<AuthResult> {
+        const tokens = this.issueTokens(id, role);
+        await this.repo.addRefreshToken(id, hashToken(tokens.refreshToken));
+        return { ...tokens, user: { id, name, email, role } };
+    }
 
-        await this.repo.createWallet(user.id as string);
+    private issueTokens(
+        id: string,
+        role: "user" | "admin",
+    ): Pick<AuthResult, "accessToken" | "refreshToken"> {
+        const payload: TokenPayload = { sub: id, role };
+        return {
+            accessToken: sign(
+                payload,
+                requireSecret("JWT_ACCESS_SECRET"),
+                process.env.ACCESS_TOKEN_EXPIRES_IN ?? "15m",
+            ),
+            refreshToken: sign(
+                payload,
+                requireSecret("JWT_REFRESH_SECRET"),
+                process.env.REFRESH_TOKEN_EXPIRES_IN ?? "7d",
+            ),
+        };
+    }
 
-        return token;
+    private verifyRefresh(token: string): TokenPayload {
+        const decoded = jwt.verify(token, requireSecret("JWT_REFRESH_SECRET"));
+        if (
+            typeof decoded === "string" ||
+            !decoded.sub ||
+            (decoded.role !== "user" && decoded.role !== "admin")
+        )
+            throw new AuthenticationError("Invalid refresh token");
+        return decoded as TokenPayload;
     }
 }

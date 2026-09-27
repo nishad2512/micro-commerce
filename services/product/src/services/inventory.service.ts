@@ -1,68 +1,87 @@
-import amqplib from "amqplib";
-import { getProductRepository } from "../config/db.js";
-import { MoreThanOrEqual } from "typeorm";
+import type amqplib from "amqplib";
+import { AppDataSource } from "../config/db.js";
+import { Product } from "../enitity/Product.js";
 
-export async function handleOrderCreate(data: any, channel: amqplib.Channel) {
-    const prod = getProductRepository();
-    for (let item of data.items) {
-        const product = await prod.findOne({
-            where: {
-                productId: item.prodId,
-                quantity: MoreThanOrEqual(item.quantity),
-            },
-        });
-        if (!product) {
-            channel.publish(
-                "ecommerce.events",
-                "inventory.fail",
-                Buffer.from(
-                    JSON.stringify({
-                        ...data,
-                        reason: "Product not found",
-                    }),
-                ),
-            );
-
-            return;
-        }
-        product.quantity -= item.quantity;
-        await prod.save(product);
-    }
-    console.log("Inventory reserved successfully");
-
+export interface OrderItemEvent {
+    prodId: number;
+    quantity: number;
+    price: number;
+}
+export interface OrderEvent {
+    orderId: number;
+    userId: string;
+    total: number;
+    items: OrderItemEvent[];
+    correlationId?: string;
+}
+const publish = (
+    channel: amqplib.Channel,
+    key: string,
+    event: OrderEvent & { reason?: string },
+) =>
     channel.publish(
         "ecommerce.events",
-        "inventory.reserved",
-        Buffer.from(JSON.stringify(data)),
+        key,
+        Buffer.from(JSON.stringify(event)),
+        {
+            persistent: true,
+            contentType: "application/json",
+            messageId: `${key}:${event.orderId}`,
+        },
     );
+
+export async function handleOrderCreate(
+    data: OrderEvent,
+    channel: amqplib.Channel,
+): Promise<void> {
+    try {
+        await AppDataSource.transaction(async (manager) => {
+            for (const item of data.items) {
+                const product = await manager
+                    .getRepository(Product)
+                    .findOne({
+                        where: { productId: item.prodId },
+                        lock: { mode: "pessimistic_write" },
+                    });
+                if (!product || product.quantity < item.quantity)
+                    throw new Error(
+                        `Insufficient inventory for product ${item.prodId}`,
+                    );
+                product.quantity -= item.quantity;
+                await manager.save(product);
+            }
+        });
+        publish(channel, "inventory.reserved", data);
+    } catch (error) {
+        publish(channel, "inventory.failed", {
+            ...data,
+            reason:
+                error instanceof Error
+                    ? error.message
+                    : "Inventory reservation failed",
+        });
+    }
 }
 
 export async function handleInventoryRelease(
-    data: any,
+    data: OrderEvent,
     channel: amqplib.Channel,
-) {
-    const prod = getProductRepository();
-    for (let item of data.items) {
-        const product = await prod.findOne({
-            where: { productId: item.prodId },
-        });
-        if (!product) {
-            channel.publish(
-                "ecommerce.events",
-                "inventory.release.fail",
-                Buffer.from(JSON.stringify(data)),
-            );
-            return;
+): Promise<void> {
+    await AppDataSource.transaction(async (manager) => {
+        for (const item of data.items) {
+            const product = await manager
+                .getRepository(Product)
+                .findOne({
+                    where: { productId: item.prodId },
+                    lock: { mode: "pessimistic_write" },
+                });
+            if (!product)
+                throw new Error(
+                    `Product ${item.prodId} was not found during inventory release`,
+                );
+            product.quantity += item.quantity;
+            await manager.save(product);
         }
-
-        product.quantity += item.quantity;
-        await prod.save(product);
-    }
-    console.log("Inventory released successfully");
-
-    channel.publish(
-        "ecommerce.events",
-        "inventory.released",
-        Buffer.from(JSON.stringify(data)),
-    );
+    });
+    publish(channel, "inventory.released", data);
 }

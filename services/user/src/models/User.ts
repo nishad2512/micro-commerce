@@ -8,17 +8,20 @@ export interface IUser {
     role: "user" | "admin";
 }
 
-interface Transaction {
-    amount: number,
-    status: "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED",
-    orderId: string
+export interface Transaction {
+    amount: number;
+    status: "SUCCESS" | "REFUNDED";
+    orderId: string;
+    type: "ORDER" | "TOP_UP";
 }
 
+export type WalletData = Pick<IWallet, "balance" | "transactions">;
+
 export interface IWallet {
-    id?: string,
-    userId: string,
-    balance: string,
-    transactions: Transaction[]
+    id?: string;
+    userId: string;
+    balance: number;
+    transactions: Transaction[];
 }
 
 const userSchema = new Schema({
@@ -26,6 +29,7 @@ const userSchema = new Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
+    refreshTokens: { type: [String], default: [], select: false },
 });
 
 const wltSchema = new Schema({
@@ -38,16 +42,26 @@ const wltSchema = new Schema({
     balance: { type: Number, default: 0 },
     transactions: [
         {
-            amount: Number,
+            amount: { type: Number, required: true },
             status: {
                 type: String,
-                enum: ["PENDING", "SUCCESS", "FAILED", "REFUNDED"],
-                default: "PENDING",
+                enum: ["SUCCESS", "REFUNDED"],
+                default: "SUCCESS",
+                required: true,
             },
-            orderId: String,
+            orderId: { type: String, required: true },
+            type: {
+                type: String,
+                enum: ["ORDER", "TOP_UP"],
+                default: "ORDER",
+                required: true,
+            },
         },
     ],
 });
+
+userSchema.set("timestamps", true);
+userSchema.index({ email: 1 }, { unique: true });
 
 export const User = mongoose.model("User", userSchema);
 export const Wallet = mongoose.model("Wallet", wltSchema);

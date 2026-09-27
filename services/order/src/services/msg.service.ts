@@ -1,51 +1,44 @@
-import prisma from "../lib/prisma.js";
 import { cancelOrder } from "./order.service.js";
 import amqplib from "amqplib";
+import type { OrderEvent } from "./order.service.js";
 
 export const handleInventoryFail = async (
-    data: any,
+    data: OrderEvent,
     channel: amqplib.Channel,
 ) => {
-    const res = await cancelOrder(parseInt(data.orderId));
+    const res = await cancelOrder(data.orderId);
 
     if(!res.success) {
-        throw new Error(res.message);
+        throw new Error("Order could not be cancelled");
     }
 
     channel.publish(
         "ecommerce.events",
         "payment.refund",
         Buffer.from(JSON.stringify(data)),
+        { persistent: true },
     );
 };
 
 export const handlePaymentFail = async (
-    data: any,
+    data: OrderEvent,
     channel: amqplib.Channel,
 ) => {
-    const res = await cancelOrder(parseInt(data.orderId));
+    const res = await cancelOrder(data.orderId);
     
     if(!res.success) {
-        throw new Error(res.message);
+        throw new Error("Order could not be cancelled");
     }
 
     channel.publish(
         "ecommerce.events",
         "inventory.release",
         Buffer.from(JSON.stringify(data)),
+        { persistent: true },
     );
 };
 
-export const handlePaymentSuccess = async (data: any) => {
-    const order = await prisma.order.updateMany({
-        where: {
-            orderId: parseInt(data.orderId),
-            status: { not: "CANCELLED" },
-        },
-        data: { status: "CONFIRMED" },
-    });
-
-    if (order.count === 0) {
-        return { success: false, message: "Order not found" };
-    }
+export const handlePaymentSuccess = async (data: OrderEvent) => {
+    const { updateOrderStatus } = await import("./order.service.js");
+    await updateOrderStatus(data.orderId, "CONFIRMED");
 };

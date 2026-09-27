@@ -33,3 +33,8 @@ spec:
               key: order-db-url
         - name: RABBITMQ_URL
           value: "amqp://rabbitmq:5672"
+        - name: JWT_ACCESS_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: ecommerce-secrets
+              key: jwt-access-secret

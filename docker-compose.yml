@@ -34,16 +34,23 @@ services:
       context: .
       dockerfile: services/user/Dockerfile
     image: ecommerce-user-service:latest
+    environment:
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-development-access-token-secret-change-me}
+      JWT_REFRESH_SECRET: "userRefreshTokenSecret"
     ports:
       - "50052:50052"
       - "3001:3001"
 
   product-service:
-    build: 
+    build:
       context: .
       dockerfile: services/product/Dockerfile
     image: ecommerce-product-service:latest
+    environment:
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-development-access-token-secret-change-me}
+      JWT_REFRESH_SECRET: "userRefreshTokenSecret"
     ports:
+      - "3003:3003"
       - "50053:50053"
 
   order-service:
@@ -54,6 +61,8 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:123@postgres:5432/saga_order
       RABBITMQ_URL: amqp://rabbitmq:5672
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-development-access-token-secret-change-me}
+      JWT_REFRESH_SECRET: "userRefreshTokenSecret"
     ports:
       - "50051:50051"
       - "3002:3002"
@@ -63,6 +72,9 @@ services:
       context: .
       dockerfile: services/api-gateway/Dockerfile
     image: ecommerce-api-gateway:latest
+    environment:
+      JWT_ACCESS_SECRET: "userAccessTokenSecret"
+      JWT_REFRESH_SECRET: "userRefreshTokenSecret"
     ports:
       - "3000:3000"
 
