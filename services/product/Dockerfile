@@ -26,5 +26,6 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/proto ./proto
 
 EXPOSE 50053
+EXPOSE 3003
 
 CMD ["node", "dist/server.js"]

@@ -15,6 +15,8 @@ The frontend runs at `http://localhost:5173`; APIs enter through `http://localho
 
 The user deployment reads `jwt-access-secret` and `jwt-refresh-secret` from the `ecommerce-secrets` Secret. The order deployment reads `jwt-access-secret`; it must be the same signing key used by the user service. Add these keys to the Secret using your cluster's secure secret-management workflow before applying the deployments. Do not put JWT values in deployment manifests or commit them to the repository.
 
+The product service Kubernetes manifests are in `services/product/k8s`. The deployment reads the same `jwt-access-secret` and the `postgres-password` keys from `ecommerce-secrets`, and connects to the `postgres` and `rabbitmq` services. Application Deployments use the `Recreate` strategy, so replacing them can briefly interrupt service.
+
 ## Store pages and roles
 
 - Signed-in users can view their order history and wallet balance/transactions.

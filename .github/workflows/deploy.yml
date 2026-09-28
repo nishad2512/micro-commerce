@@ -20,6 +20,9 @@ jobs:
           - service: user-service
             dockerfile: services/user/Dockerfile
             image_name: ecommerce-user-service
+          - service: product-service
+            dockerfile: services/product/Dockerfile
+            image_name: ecommerce-product-service
     
     steps:
     - name: Checkout Code
@@ -79,11 +82,16 @@ jobs:
         # 3. Order Service
         sed -i "s|image: ecommerce-order-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-order-service:${{ github.sha }}|g" services/order/k8s/deployment.yml
         kubectl apply -f services/order/k8s/
+        
+        # 3. Product Service
+        sed -i "s|image: ecommerce-product-service:latest|image: ${{ secrets.DOCKERHUB_USERNAME }}/ecommerce-product-service:${{ github.sha }}|g" services/product/k8s/deployment.yml
+        kubectl apply -f services/product/k8s/
 
         # Track the rollout status to catch configuration runtime failures
         kubectl rollout status deployment/api-gateway --timeout=60s
         kubectl rollout status deployment/user-service --timeout=60s
         kubectl rollout status deployment/order-service --timeout=60s
+        kubectl rollout status deployment/product-service --timeout=60s
 
     - name: Rollback on Failure
       if: failure()
@@ -92,3 +100,4 @@ jobs:
         kubectl rollout undo deployment/api-gateway
         kubectl rollout undo deployment/user-service
         kubectl rollout undo deployment/order-service
+        kubectl rollout undo deployment/product-service
