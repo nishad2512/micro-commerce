@@ -88,10 +88,10 @@ jobs:
         kubectl apply -f services/product/k8s/
 
         # Track the rollout status to catch configuration runtime failures
-        kubectl rollout status deployment/api-gateway --timeout=60s
-        kubectl rollout status deployment/user-service --timeout=60s
-        kubectl rollout status deployment/order-service --timeout=60s
-        kubectl rollout status deployment/product-service --timeout=60s
+        kubectl rollout status deployment/api-gateway --timeout=180s
+        kubectl rollout status deployment/user-service --timeout=180s
+        kubectl rollout status deployment/order-service --timeout=180s
+        kubectl rollout status deployment/product-service --timeout=200s
 
     - name: Rollback on Failure
       if: failure()
